@@ -1,28 +1,133 @@
+# En compose.yaml fil beskriver hvordan en eller flere containere skal køre i samspil.
+#
+# Den her compose.yaml beskriver fx hvordan følgende tre services spiller sammen:
+#
+#   1. En MySQL-database (MariaDB)
+#   2. En Spring Boot back-end
+#   3. En Vue.js front-end
+#
+# Du kan nøjes med at køre mysql-databasen ved at udkommentere de to andre.
+#
+# Det kan være nyttigt hvis du fx ikke ønsker at bruge front-end'en eller back-end'en,
+# eller hvis du udvikler på front-end'en eller back-end'en og gerne vil køre den direkte
+# fra IntelliJ / VSCode i stedet for, sådan at du hurtigere kan genstarte serveren når
+# du har lavet noget om.
+
 services:
+  # Den første service hedder 'db' og er en MySQL-database (MariaDB er en fork af MySQL).
   db:
+    # Den ene måde vi kan frembringe et image til en container er 'image: navn:version'
+    #
+    # Man kan kun bruge navne og versioner som findes på DockerHub. For eksempel findes
+    # 'mariadb:latest' her: https://hub.docker.com/_/mariadb -- der er virkeligt mange
+    # versioner, men :latest peger altid på den nyeste. Det er ofte ikke en god idé at
+    # vælge :latest i produktion, men udmærket at gøre når man udvikler.
+    #
+    # Metoden giver mening når man vil køre noget software, der er lavet af andre, som
+    # allerede er færdigpakket og bare skal konfigureres.
     image: mariadb:latest
+
+    # MariaDB's Docker-image er lavet sådan at når man starter det første gang, så leder
+    # den efter miljøvariable til at sætte adgangskontrol på databasen. Hvis man retter
+    # dem efter man genstarter, kan det godt være, det ikke virker. Så skal man enten
+    # slette containeren, eller gå ind og rette adgangskontrollen i databasen manuelt.
     environment:
       MYSQL_ROOT_PASSWORD: kea
       MYSQL_DATABASE: kea
       MYSQL_USER: kea
       MYSQL_PASSWORD: kea
       MYSQL_HOST: db
+    
+    # En volume er Docker-sprog for et filsystem.
+    #
+    # Ligesom en Docker-container har sin egen IP-adresse, har den også sit eget virtuelle
+    # filsystem, som forhindrer programmerne i Docker-containeren fra at læse filerne på
+    # resten af din computer eller den server, app'en er deployet på.
+    #
+    # Man kan gøre brug af volumes til at putte ting ind i containeren, som den ikke er
+    # compilet med. Det er blandt andet nyttigt, hvis det ikke er én selv der har compilet
+    # den.
+    #
+    # I MySQL's tilfælde vil vi gerne sørge for at mappen /var/lib/mysql inde i containeren
+    # faktisk bliver gemt i en mappe udenfor containeren, som vi kalder db_data, sådan at
+    # hvis man sletter containeren, går databasens indhold ikke tabt.
+    #
+    # Vi siger at vi "mounter db_data som /var/lib/mysql i containeren med læse+skriveadgang (rw)"
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data:/var/lib/mysql:rw
+
+    # Port-mapping er nødvendigt hvis man kører en server inde i Docker-containeren, som man
+    # vil have adgang til uden for Docker-containeren. Det kunne fx være at ens MySQL-server
+    # skal tilgås fra MySQL Workbench, eller at man gerne vil besøge sin app i browseren.
+    #
+    # En port-mapping består af enten 2 eller 3 dele:
+    #
+    #   - host-port:container-port
+    #   - host-ip:host-port:container-port
+    #
+    # En forklaring:
+    #
+    #   - 'host-port' betyder "en port på din computer" (hosten)
+    #   - 'container-port' betyder "en port inde i Docker-containeren"
+    #   - 'host-ip' betyder "en IP-adresse som hosten har" (hosten har flere adresser)
+    #
+    # Angiver man ikke en host-ip, og nøjes med at skrive fx "3306:3306", så betyder det at når
+    # man kører sin Docker-container, bliver MySQL-serveren i containeren eksponeret på ALLE de
+    # IP-adresser som hosten har! Det er ikke så farligt, når vi kører på vores egen computer,
+    # for den har sikkert en firewall som blokerer for alt alligevel. Men når vi er på en Linux-
+    # server, kan vi ikke antage, at der er en firewall som blokerer alt.
+    #
+    # Det ville være en skam hvis man gjorde ens MySQL-server tilgængelig på hele internettet.
+    # Også selvom den er password-beskyttet, for passwords kan meget nemt brydes.
     ports:
-      - "3306:3306"
+      # Sikkert:
+      - "127.0.0.1:3306:3306"
+      # Usikkert:
+      # - "3306:3306"
 
-  # todo:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     MYSQL_DATABASE: kea
-  #     MYSQL_USER: kea
-  #     MYSQL_PASSWORD: kea
-  #     MYSQL_HOST: db
+  # Den anden service hedder 'todo' og er en Spring Boot back-end.
+  todo:
+    # Vi kan ikke angive et 'image:' for vores app er ikke uploadet på DockerHub.
+    #
+    # I stedet kan vi beskrive hvordan man bygger image'et ved hjælp af en Dockerfile.
+    build:
+      # Context her betyder bare mappen vi er i. Vores back-end bor i rodmappen, som hedder '.'
+      context: .
+      # I rodmappen findes filen Dockerfile, som compiler vores Java-app og gemmer .jar-filen.
+      dockerfile: Dockerfile
+    ports:
+      # Spring Boot-applikationer starter jo på port 8080. Men hvis man kører mange Spring Boot-
+      # applikationer i separate containere på den samme maskine, er det nyttigt at kunne mappe
+      # dem ud på forskellige portnumre på host-maskinen.
+      #
+      # Husk sikkerheden.
+      - "127.0.0.1:8081:8080"
 
+    # En anden nyttig ting man kan bruge volumes til er at indlæse hemmeligheder.
+    #
+    # Vi ønsker ikke at gemme sådan noget som brugernavne og kodeord til databasen i vores git.
+    #
+    # Vi ønsker heller ikke at gemme det inde i vores container-images, for hvad nu hvis nogen
+    # får fingre i et image, så kan de pludseligt også koden til vores database!
+    #
+    # Nedenfor mounter vi en separat 'application.properties'-fil som er specialiseret til når
+    # back-end'en kører inde i en container frem for igennem en IDE. Databasen har nemlig to
+    # forskellige IP-adresser afhængigt af om du er udenfor eller inde i containeren:
+    #
+    #   - Udenfor hedder den 127.0.0.1:3306 på grund af ovenstående port-mapping.
+    #   - Inde i hedder den db:3306 på grund af Docker Compose's magiske DNS.
+    #
+    # Husk at 127.0.0.1 betyder altid "min egen computer": Hver Docker-container har sin egen
+    # "min egen computer", og derfor peger 127.0.0.1 på containeren selv. Det duer jo ikke, for
+    # back-end-containeren har ikke en MySQL-server kørende.
+    volumes:
+      - ./application-docker.properties:/app/application.properties:ro
+    environment:
+      SPRING_CONFIG_LOCATION: file:/app/application.properties
+
+# Volumes er nævnt i et separat afsnit for at erklære "Der findes en volume ved navn 'db_data'".
+# De 'volumes:' som står under hver enkelte service har til ansvar at mounte dem, men den her
+# 'volumes:' i bunden af filen er ikke knyttet til nogen enkelt service, og har til formål at
+# erklære, at volume'et findes.
 volumes:
   db_data:
