@@ -4,45 +4,50 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import static org.springframework.web.bind.annotation.RequestMethod.*;
 
 @RestController
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*", methods = { GET, HEAD, POST, OPTIONS })
 public class TodoController {
 	@Autowired
 	private TodoItemRepository todoItemRepository;
 
-	@PostMapping(path = "/todo")
+	@PostMapping(path = "/todo/create")
 	@ResponseBody
-	public TodoResponse create_todo(@RequestParam String title, @RequestParam TodoStatus status) {
+	public TodoItemResponse createTodo(@RequestParam String title, @RequestParam TodoStatus status) {
 		TodoItem item = new TodoItem(title, status);
 		todoItemRepository.save(item);
-		return new TodoResponse(true);
+		return new TodoItemResponse(true, item);
 	}
 
-	@GetMapping("/todo")
+	@GetMapping("/todo/list")
 	@ResponseBody
-	public Iterable<TodoItem> read_todos() {
+	public Iterable<TodoItem> readTodos() {
 		return todoItemRepository.findAll();
 	}
 
-	@PutMapping(path = "/todo")
+	@PostMapping(path = "/todo/update")
 	@ResponseBody
-	public TodoResponse update_todo(
+	public TodoResponse updateTodo(
 			@RequestParam Integer id,
-			@RequestParam String title,
-			@RequestParam TodoStatus status) {
+			@RequestParam Optional<String> title,
+			@RequestParam Optional<TodoStatus> status) {
 		Optional<TodoItem> maybeItem = todoItemRepository.findById(id);
 		maybeItem.ifPresent(item -> {
-			item.title = title;
-			item.status = status;
+			title.ifPresent((t) -> {
+				item.title = t;
+			});
+			status.ifPresent((s) -> {
+				item.status = s;
+			});
 			todoItemRepository.save(item);
 		});
 		return new TodoResponse(maybeItem.isPresent());
 	}
 
-	@DeleteMapping(path = "/todo")
+	@PostMapping(path = "/todo/delete")
 	@ResponseBody
-	public TodoResponse delete_todo(@RequestParam Integer id) {
+	public TodoResponse deleteTodo(@RequestParam Integer id) {
 		Optional<TodoItem> maybeItem = todoItemRepository.findById(id);
 		maybeItem.ifPresent(item -> {
 			todoItemRepository.delete(item);
@@ -51,6 +56,9 @@ public class TodoController {
 	}
 
 	record TodoResponse(boolean success) {
+	}
+
+	record TodoItemResponse(boolean success, TodoItem item) {
 	}
 
 }

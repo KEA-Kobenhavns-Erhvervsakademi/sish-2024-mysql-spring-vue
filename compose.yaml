@@ -100,8 +100,8 @@ services:
       # applikationer i separate containere på den samme maskine, er det nyttigt at kunne mappe
       # dem ud på forskellige portnumre på host-maskinen.
       #
-      # Husk sikkerheden.
-      - "127.0.0.1:8081:8080"
+      # I øvrigt: Husk sikkerheden. (8080:8080 alene betyder "alle interfaces")
+      - "127.0.0.1:8080:8080"
 
     # En anden nyttig ting man kan bruge volumes til er at indlæse hemmeligheder.
     #
