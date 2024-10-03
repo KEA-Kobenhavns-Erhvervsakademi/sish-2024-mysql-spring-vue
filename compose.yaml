@@ -86,15 +86,15 @@ services:
       # - "3306:3306"
 
   # Den anden service hedder 'todo' og er en Spring Boot back-end.
-  todo:
-    # Vi kan ikke angive et 'image:' for vores app er ikke uploadet på DockerHub.
+  todo-backend:
+    # Vi kan ikke angive et 'image:' for vores back-end app er ikke uploadet på DockerHub.
     #
     # I stedet kan vi beskrive hvordan man bygger image'et ved hjælp af en Dockerfile.
     build:
       # Context her betyder bare mappen vi er i. Vores back-end bor i rodmappen, som hedder '.'
       context: .
-      # I rodmappen findes filen Dockerfile, som compiler vores Java-app og gemmer .jar-filen.
-      dockerfile: Dockerfile
+      # I rodmappen findes en Dockerfile, som compiler vores Java-app og gemmer .jar-filen.
+      dockerfile: backend.Dockerfile
     ports:
       # Spring Boot-applikationer starter jo på port 8080. Men hvis man kører mange Spring Boot-
       # applikationer i separate containere på den samme maskine, er det nyttigt at kunne mappe
@@ -124,6 +124,13 @@ services:
       - ./application-docker.properties:/app/application.properties:ro
     environment:
       SPRING_CONFIG_LOCATION: file:/app/application.properties
+
+  todo-frontend:
+    build:
+      context: ./frontend
+      dockerfile: frontend.Dockerfile
+    ports:
+      - "127.0.0.1:8081:8081"
 
 # Volumes er nævnt i et separat afsnit for at erklære "Der findes en volume ved navn 'db_data'".
 # De 'volumes:' som står under hver enkelte service har til ansvar at mounte dem, men den her
